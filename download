@@ -1,0 +1,16 @@
+# Arquivos que NÃO entram na imagem Docker
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+env/
+.git/
+.gitignore
+.vscode/
+.idea/
+tests/
+*.postman_collection.json
+Dockerfile
+.dockerignore
+README.md

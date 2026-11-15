@@ -1,0 +1,71 @@
+name: CI/CD - FastAPI e Docker no Azure
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  AZURE_WEBAPP_NAME: api-livraria-heloisa   # nome do App Service no Azure
+
+permissions:
+  contents: read
+  packages: write   # permite publicar a imagem no GitHub Container Registry
+
+jobs:
+  testes:
+    name: 1. CI - testes da API
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt pytest httpx
+
+      - name: Rodar testes
+        run: pytest -q
+
+  imagem:
+    name: 2. Criar e publicar a imagem Docker
+    needs: testes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Definir o nome da imagem
+        run: echo "IMAGEM=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - name: Entrar no GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Construir e enviar a imagem
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGEM }}:${{ github.sha }}
+            ${{ env.IMAGEM }}:latest
+
+  deploy:
+    name: 3. CD - deploy no Azure
+    needs: imagem
+    runs-on: ubuntu-latest
+    steps:
+      - name: Definir o nome da imagem
+        run: echo "IMAGEM=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - name: Publicar o contêiner no Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          images: ${{ env.IMAGEM }}:${{ github.sha }}
